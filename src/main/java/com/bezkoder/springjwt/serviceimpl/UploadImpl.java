@@ -1,24 +1,69 @@
 package com.bezkoder.springjwt.serviceimpl;
 
+import com.bezkoder.springjwt.models.Images;
+import com.bezkoder.springjwt.repository.ImageRepository;
 import com.bezkoder.springjwt.service.IUpload;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StreamUtils;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
 public class UploadImpl implements IUpload {
-    private final Path root = Paths.get("datn/uploads");
+    @Autowired
+    ImageRepository imageRepository;
+    private final Path root = Paths.get("uploads");
     @Override
-    public String storeFile(InputStream inputStream, String fileName) throws IOException {
-//        File directory = new File(root);
-//        if(!directory.exists()){
-//            directory.mkdirs();
-//        }
-        return null;
+    public List<Images> storeFile(MultipartFile[] files) throws IOException {
+        List<Images> images = null;
+        try{
+            images =new ArrayList<>();
+            for (MultipartFile multipartFile : files){
+                 String name =UUID.randomUUID().toString()+multipartFile.getOriginalFilename();
+
+                try {
+                    if(!Files.exists(root)){
+                        Files.createDirectories(root);
+                    }
+                    Files.copy(multipartFile.getInputStream(),
+                            this.root.resolve(name), StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+
+                images.add(new Images(name,null));
+                imageRepository.saveAll(images);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return  images;
     }
+    @Override
+    public byte[] readContentFile(String fileName) {
+        try {
+            Path file = root.resolve(fileName).normalize();
+            Resource resource = new UrlResource(file.toUri());
+            if(resource.exists() || resource.isReadable()){
+                byte[] bytes = StreamUtils.copyToByteArray(resource.getInputStream());
+                return  bytes;
+            }else {
+                throw new RuntimeException("Can not read file " + fileName);
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }
